@@ -1,5 +1,4 @@
 local NAME, S = ...
-local VERSION = .1
 
 -- only uses AceGUI part of the Ace3 framework
 local ACR = LibStub("AceConfigRegistry-3.0")
@@ -12,6 +11,14 @@ local select = select
 local wipe = wipe
 local strsub = strsub
 local bit_band = bit.band
+
+local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local GetSpellInfo = GetSpellInfo
+local GetSpellLink = GetSpellLink
+
+local COMBATLOG_OBJECT_REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY
+local COMBATLOG_OBJECT_REACTION_HOSTILE = COMBATLOG_OBJECT_REACTION_HOSTILE
+local COMBATLOG_OBJECT_RAIDTARGET_MASK = COMBATLOG_OBJECT_RAIDTARGET_MASK
 
 local Juke = CreateFrame("Frame")
 local db
@@ -27,29 +34,39 @@ local chatType
 	---------------
 
 local defaults = {
-	version = .1, -- update this on savedvars changes
+	db_version = .2, -- update this on savedvars changes
+	version = S.VERSION,
+	build = S.BUILD,
+	
 	toggleinterrupt = true,
 	colorinterrupt = {0, 110/255, 1},
 	interrupt = L.MSG_INTERRUPT,
+	interrupt_self = L.MSG_INTERRUPT_SELF,
 	togglejuke = true,
 	juke = L.MSG_JUKE,
+	juke_self = L.MSG_JUKE_SELF,
 	colorjuke = {1, .5, 0},
 	chat = 1,
 }
 
 local options = {
 	type = "group",
-	name = format("%s |cffADFF2Fv%s|r", NAME, VERSION),
+	name = format("%s |cffADFF2Fv%s|r", NAME, S.VERSION),
 	handler = Juke,
 	get = "GetValue", set = "SetValue",
 	args = {
+		solo = {
+			type = "toggle", order = 1,
+			name = "|cffF6ADC6"..SOLO.." "..MODE.."|r",
+			desc = QUICKBUTTON_NAME_MY_ACTIONS_TOOLTIP,
+		},
 		inline1 = {
-			type = "group", order = 1, inline = true,
+			type = "group", order = 2, inline = true,
 			name = " ",
 			args = {
 				toggleinterrupt = {
 					type = "toggle", order = 1, descStyle = "",
-					name = function() return " |cff"..S.dex2hex(db.colorinterrupt)..INTERRUPT.."|r" end,
+					name = function() return " |cff"..S.dec2hex(db.colorinterrupt)..INTERRUPT.."|r" end,
 				},
 				colorinterrupt = {
 					type = "color", order = 2, descStyle = "",
@@ -59,11 +76,11 @@ local options = {
 				interrupt = {
 					type = "input", order = 3, width = "full",
 					name = "",
-					set = "SetInput",
+					get = "GetInput", set = "SetInput",
 				},
 				togglejuke = {
 					type = "toggle", order = 4, descStyle = "",
-					name = function() return " |cff"..S.dex2hex(db.colorjuke).."Juke|r" end,
+					name = function() return " |cff"..S.dec2hex(db.colorjuke).."Juke|r" end,
 				},
 				colorjuke = {
 					type = "color", order = 5, descStyle = "",
@@ -73,7 +90,7 @@ local options = {
 				juke = {
 					type = "input", order = 6, width = "full",
 					name = "",
-					set = "SetInput",
+					get = "GetInput", set = "SetInput",
 				},
 			},
 		},
@@ -120,8 +137,13 @@ function Juke:SetColor(i, r, g, b)
 	c[3] = b
 end
 
+function Juke:GetInput(i)
+	return db.solo and db[i[#i].."_self"] or db[i[#i]]
+end
+
 function Juke:SetInput(i, v)
-	db[i[#i]] = (v:trim() == "") and defaults[i[#i]] or v
+	local s = db.solo and "_self" or ""
+	db[i[#i]..s] = (v:trim() == "") and defaults[i[#i]..s] or v
 end
 
 	----------------------
@@ -138,14 +160,14 @@ Juke:SetScript("OnEvent", Juke.OnEvent)
 function Juke:ADDON_LOADED(event, addon)
 	if addon ~= NAME then return end
 	
-	if not JukeDB or JukeDB.version ~= defaults.version then
+	if not JukeDB or JukeDB.db_version ~= defaults.db_version then
 		JukeDB = CopyTable(defaults)
 	end
 	db = JukeDB
 	
 	ACR:RegisterOptionsTable("Juke", options)
 	ACD:AddToBlizOptions("Juke", NAME)
-	ACD:SetDefaultSize("Juke", 420, 290)
+	ACD:SetDefaultSize("Juke", 420, 310)
 	
 	self:RegisterEvent("GROUP_ROSTER_UPDATE")
 	self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
@@ -220,16 +242,16 @@ local function UnitIcon(unitFlags, reaction)
 	return iconString, chat
 end
 
-local function ClassColor(sourceGUID)
-	return (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[GetPlayerClass[sourceGUID]].colorStr
+local function ClassColor(guid)
+	return (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[GetPlayerClass[guid]].colorStr
 end
 
 	------------
 	--- Args ---
 	------------
 
-local function SetEventMessage(msgtype)
-	args.msg = db[msgtype]
+local function SetMessage(msgtype)
+	args.msg = db[msgtype..(db.solo and "_self" or "")]
 	args.color = db["color"..msgtype]
 end
 
@@ -260,13 +282,13 @@ end
 	-------------
 
 function Juke:GROUP_ROSTER_UPDATE(event)
-	local c = db.chat
-	
-	if c == 2 then
+	if db.chat == 2 then
 		chatType = "SAY"
-	elseif c == 3 then
+	elseif db.chat == 3 then
 		local isInstanceChat = IsInRaid(LE_PARTY_CATEGORY_INSTANCE) or IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
 		chatType = isInstanceChat and "INSTANCE_CHAT" or IsInRaid() and "RAID" or IsInGroup() and "PARTY"
+	else
+		chatType = nil
 	end
 end
 
@@ -288,13 +310,11 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 	local destType = tonumber(strsub(destGUID, 5, 5))
 	local sourcePlayer = sourceType and (bit_band(sourceType, 0x7) == 0)
 	local destPlayer = destType and (bit_band(destType, 0x7) == 0)
+	
 	if not sourcePlayer then return end -- only show jukes/interrupts done by players
+	if db.solo and sourceGUID ~= S.player.guid then return end -- only show stuff done by yourself
 	
 	wipe(args)
-	
-	------------
-	--- Miss ---
-	------------
 	
 	if subevent == "SPELL_CAST_SUCCESS" then
 		if S.InterruptID[spellID] and db.togglejuke then
@@ -321,66 +341,61 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 		args.xspell, args.xspellx = _GetSpellInfo(SuffixParam1, SuffixParam2, SuffixParam3)
 		
 		if db.toggleinterrupt then
-			SetEventMessage("interrupt")
+			SetMessage("interrupt")
 		end
 		if S.InterruptID[spellID] then
 			guids[sourceGUID] = false -- succesful interrupt
 		end
 	
 	elseif subevent == "SPELL_INTERRUPT_WASTED" then
-		SetEventMessage("juke")
+		SetMessage("juke")
 	end
 	
-	---------------
-	--- Message ---
-	---------------
-	
 	-- check if there is any message
-	if args.msg then
-		
+	if not args.msg then return end
+	
 	------------
 	--- Unit ---
 	------------
+	
+	if sourceName then -- if no unit, then guid is an empty string and name is nil
+		-- trim out (CRZ) realm name; only do this for players
+		local name = sourcePlayer and strmatch(sourceName, "([^%-]+)%-?.*") or sourceName
+		local fname = (sourceGUID == S.player.guid) and UNIT_YOU_SOURCE or name
+		local sourceIconLocal, sourceIconChat = UnitIcon(sourceRaidFlags, 1)
+		local sourceReaction = UnitReaction(sourceFlags)
+		local color = (sourceReaction == "Friendly") and ClassColor(sourceGUID) or S.ReactionColor[sourceReaction]
 		
-		if sourceName then -- if no unit, then guid is an empty string and name is nil
-			-- trim out (CRZ) realm name; only do this for players
-			local name = sourcePlayer and strmatch(sourceName, "([^%-]+)%-?.*") or sourceName
-			local fname = (sourceGUID == S.player.guid) and UNIT_YOU_SOURCE or name
-			local sourceIconLocal, sourceIconChat = UnitIcon(sourceRaidFlags, 1)
-			local sourceReaction = UnitReaction(sourceFlags)
-			local color = (sourceReaction == "Friendly") and ClassColor(sourceGUID) or S.ReactionColor[sourceReaction]
-			
-			args.src = format("|c%s"..TEXT_MODE_A_STRING_SOURCE_UNIT.."|r", color, sourceIconLocal, sourceGUID, sourceName, fname)
-			args.srcx = format("%s[%s]", sourceIconChat, name)
-		end
+		args.src = format("|c%s"..TEXT_MODE_A_STRING_SOURCE_UNIT.."|r", color, sourceIconLocal, sourceGUID, sourceName, fname)
+		args.srcx = format("%s[%s]", sourceIconChat, name)
+	end
+	
+	if destName then
+		local name = destPlayer and strmatch(destName, "([^%-]+)%-?.*") or destName
+		local fname = (destGUID == S.player.guid) and UNIT_YOU_DEST or name
+		local destIconLocal, destIconChat = UnitIcon(destRaidFlags, 2)
+		local destReaction = UnitReaction(destFlags)
+		local color = (destReaction == "Friendly") and ClassColor(destGUID) or S.ReactionColor[destReaction] 
 		
-		if destName then
-			local name = destPlayer and strmatch(destName, "([^%-]+)%-?.*") or destName
-			local fname = (destGUID == S.player.guid) and UNIT_YOU_DEST or name
-			local destIconLocal, destIconChat = UnitIcon(destRaidFlags, 2)
-			local destReaction = UnitReaction(destFlags)
-			local color = (destReaction == "Friendly") and ClassColor(destGUID) or S.ReactionColor[destReaction] 
-			
-			args.dest = format("|c%s"..TEXT_MODE_A_STRING_DEST_UNIT.."|r", color, destIconLocal, destGUID, destName, fname)
-			args.destx = format("%s[%s]", destIconChat, name)
-		end
-		
-		args.spell, args.spellx = _GetSpellInfo(spellID, spellName, spellSchool)
-		
-	--------------
-	--- Output ---
-	--------------
-		
-		ChatFrame1:AddMessage(ReplaceArgs(args), unpack(args.color))
-		
-		-- dont default to "SAY" if chatType is nil
-		if db.chat > 1 and chatType then
-			-- avoid ERR_CHAT_WHILE_DEAD
-			-- dont ever spam the battleground group
-			local iseedeadpeople = UnitIsDeadOrGhost("player") and S.Talk[chatType]
-			if iseedeadpeople or isBattleground then return end
-			SendChatMessage(ReplaceArgs(args, true), chatType)
-		end
+		args.dest = format("|c%s"..TEXT_MODE_A_STRING_DEST_UNIT.."|r", color, destIconLocal, destGUID, destName, fname)
+		args.destx = format("%s[%s]", destIconChat, name)
+	end
+	
+	args.spell, args.spellx = _GetSpellInfo(spellID, spellName, spellSchool)
+	
+--------------
+--- Output ---
+--------------
+	
+	ChatFrame1:AddMessage(ReplaceArgs(args), unpack(args.color))
+	
+	-- dont default to "SAY" if chatType is nil
+	if db.chat > 1 and chatType then
+		-- avoid ERR_CHAT_WHILE_DEAD
+		-- dont ever spam the battleground group
+		local iseedeadpeople = UnitIsDeadOrGhost("player") and S.Talk[chatType]
+		if iseedeadpeople or isBattleground then return end
+		SendChatMessage(ReplaceArgs(args, true), chatType)
 	end
 end
 

@@ -2,10 +2,10 @@
 --- Author: Ketho (EU-Boulderfist)		---
 --- License: Public Domain				---
 --- Created: 2014.06.17					---
---- Version: 0.1 [2014.06.17]			---
+--- Version: 0.2 [2014.06.19]			---
 -------------------------------------------
 --- Curse			http://www.curse.com/addons/wow/juke
---- WoWInterface	...
+--- WoWInterface	http://www.wowinterface.com/downloads/info22890-Juke.html
 
 local NAME, S = ...
 S.VERSION = GetAddOnMetadata(NAME, "Version")
@@ -45,16 +45,21 @@ S.SchoolColor = {
 	[0x40] = "FF80FF", -- Arcane
 }
 
-S.EventColor = {
-	interrupt = {0, 110/255, 1},
-	juke = {1, .5, 0},
-}
-
 S.ReactionColor = {
 	Friendly = "FF57A3FF",
 	Hostile = "FFBF0D0D",
 	Unknown = "FFBFBFBF",
 }
+
+S.STRING_REACTION_ICON = {
+	TEXT_MODE_A_STRING_SOURCE_ICON,
+	TEXT_MODE_A_STRING_DEST_ICON,
+}
+
+S.COMBATLOG_OBJECT_RAIDTARGET = {}
+for i = 1, 8 do
+	S.COMBATLOG_OBJECT_RAIDTARGET[_G["COMBATLOG_OBJECT_RAIDTARGET"..i]] = i
+end
 
 S.Talk = {
 	SAY = true,
@@ -75,9 +80,7 @@ local function GetTimer() -- allocate timers
 		i = i + 1
 	end
 	-- if a timer isnt running return that, otherwise return a new one
-	if not timers[i] then
-		timers[i] = CreateFrame("Frame")
-	end
+	timers[i] = timers[i] or CreateFrame("Frame")
 	return timers[i]
 end
 
@@ -99,14 +102,10 @@ end
 	--- Player ---
 	--------------
 
-local player = {
-	name = UnitName("player"),
-}
-S.player = player
-
+S.player = {}
 -- guid not readily available at first startup
 S.Timer(function() S.player.guid = UnitGUID("player") end, 0)
 
-function S.dex2hex(color)
+function S.dec2hex(color)
 	return format("%02X%02X%02X", color[1]*255, color[2]*255, color[3]*255)
 end

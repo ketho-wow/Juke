@@ -3,12 +3,16 @@
 local L = {
 	enUS = {
 		MSG_INTERRUPT = "<SRC><SPELL> "..ACTION_SPELL_INTERRUPT.." <DEST><XSPELL>",
+		MSG_INTERRUPT_SELF = "<SPELL> "..ACTION_SPELL_INTERRUPT.." <DEST><XSPELL>",
 		MSG_JUKE = "<SRC> juked <SPELL> on <DEST>",
+		MSG_JUKE_SELF = "juked <SPELL> on <DEST>",
 		BROKER_CLICK = "|cffFFFFFFClick|r to open the options menu",
 	},
 	deDE = {
-		MSG_INTERRUPT = "<SRC><SPELL> unterbrach <DEST><XSPELL>", -- Needs review
-		MSG_JUKE = "<SRC> verschwendete <SPELL> on <DEST>", -- Needs review
+		MSG_INTERRUPT = "<SRC><SPELL> unterbrach <DEST><XSPELL>",
+		MSG_INTERRUPT_SELF = "<SPELL> unterbrach <DEST><XSPELL>",
+		MSG_JUKE = "<SRC> verschwendete <SPELL> on <DEST>",
+		MSG_JUKE_SELF = "verschwendete <SPELL> on <DEST>",
 		BROKER_CLICK = "|cffFFFFFFKlickt|r, um das Optionsmenü zu öffnen",
 	},
 	esES = {
