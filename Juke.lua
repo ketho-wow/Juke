@@ -2,7 +2,7 @@
 --- Author: Ketho (EU-Boulderfist)		---
 --- License: Public Domain				---
 --- Created: 2014.06.17					---
---- Version: 0.2 [2014.06.19]			---
+--- Version: 0.3 [2014.06.22]			---
 -------------------------------------------
 --- Curse			http://www.curse.com/addons/wow/juke
 --- WoWInterface	http://www.wowinterface.com/downloads/info22890-Juke.html
@@ -10,6 +10,8 @@
 local NAME, S = ...
 S.VERSION = GetAddOnMetadata(NAME, "Version")
 S.BUILD = "Release"
+
+local pairs = pairs
 
 	------------
 	--- Data ---
@@ -45,6 +47,7 @@ S.SchoolColor = {
 	[0x40] = "FF80FF", -- Arcane
 }
 
+-- leading FF since its used in the same place as RAID_CLASS_COLORS[class].colorStr
 S.ReactionColor = {
 	Friendly = "FF57A3FF",
 	Hostile = "FFBF0D0D",
@@ -70,33 +73,31 @@ S.Talk = {
 	--- Timer ---
 	-------------
 
--- behold KethoTimer, its not fueled on animations but it works x)
--- I think vs AceTimer this is better in the case of single OnUpdates
+-- screw AceTimer :D
+-- borrowed/modified code from Phanx
 local timers = {}
+S.Timer = CreateFrame("Frame")
+S.Timer:Hide()
 
-local function GetTimer() -- allocate timers
-	local i = 1
-	while timers[i] and timers[i].running do
-		i = i + 1
-	end
-	-- if a timer isnt running return that, otherwise return a new one
-	timers[i] = timers[i] or CreateFrame("Frame")
-	return timers[i]
+function S.Timer:New(func, delay)
+	timers[func] = delay -- add timer
+	self:Show()
 end
 
-function S.Timer(func, delay)
-	local t = GetTimer()
-	t.running = true
-	local sum = 0
-	t:SetScript("OnUpdate", function(self, e)
-		sum = sum + e
-		if sum > delay then
-			self:SetScript("OnUpdate", nil)
-			self.running = false
+S.Timer:SetScript("OnUpdate", function(self, elapsed)
+	local stop = true
+	for func, delay in pairs(timers) do
+		timers[func] = delay - elapsed
+		stop = false
+		if timers[func] < 0 then
+			timers[func] = nil -- remove timer
 			func()
 		end
-	end)
-end
+	end
+	if stop then -- all timers finished
+		self:Hide()
+	end
+end)
 
 	--------------
 	--- Player ---
@@ -104,7 +105,7 @@ end
 
 S.player = {}
 -- guid not readily available at first startup
-S.Timer(function() S.player.guid = UnitGUID("player") end, 0)
+S.Timer:New(function() S.player.guid = UnitGUID("player") end, 0)
 
 function S.dec2hex(color)
 	return format("%02X%02X%02X", color[1]*255, color[2]*255, color[3]*255)

@@ -6,9 +6,8 @@ local ACD = LibStub("AceConfigDialog-3.0")
 
 local L = S.L
 
-local tonumber = tonumber
 local select = select
-local wipe = wipe
+local wipe, unpack = wipe, unpack
 local strsub = strsub
 local bit_band = bit.band
 
@@ -34,17 +33,17 @@ local chatType
 	---------------
 
 local defaults = {
-	db_version = .2, -- update this on savedvars changes
+	db_version = .3, -- update this on savedvars changes
 	version = S.VERSION,
 	build = S.BUILD,
 	
 	toggleinterrupt = true,
 	colorinterrupt = {0, 110/255, 1},
 	interrupt = L.MSG_INTERRUPT,
-	interrupt_self = L.MSG_INTERRUPT_SELF,
+	interrupt_solo = L.MSG_INTERRUPT_SOLO,
 	togglejuke = true,
 	juke = L.MSG_JUKE,
-	juke_self = L.MSG_JUKE_SELF,
+	juke_solo = L.MSG_JUKE_SOLO,
 	colorjuke = {1, .5, 0},
 	chat = 1,
 }
@@ -138,11 +137,11 @@ function Juke:SetColor(i, r, g, b)
 end
 
 function Juke:GetInput(i)
-	return db.solo and db[i[#i].."_self"] or db[i[#i]]
+	return db[i[#i]..(db.solo and "_solo" or "")]
 end
 
 function Juke:SetInput(i, v)
-	local s = db.solo and "_self" or ""
+	local s = db.solo and "_solo" or ""
 	db[i[#i]..s] = (v:trim() == "") and defaults[i[#i]..s] or v
 end
 
@@ -217,7 +216,7 @@ end})
 local function _GetSpellInfo(spellID, spellName, spellSchool)
 	-- fallback to default spell color for combined magic schools
 	local spellLinkLocal = format(" |cff%s"..TEXT_MODE_A_STRING_SPELL.."|r", S.SchoolColor[spellSchool] or "71D5FF", spellID, "", spellName)
-	local spellIcon = format("|T%s:16:16:0:0%s|t", GetSpellIcon[spellID], crop)
+	local spellIcon = format("|T%s:16:16:2:0%s|t", GetSpellIcon[spellID], crop)
 	return spellLinkLocal..spellIcon, _GetSpellLink[spellID]
 end
 
@@ -251,7 +250,7 @@ end
 	------------
 
 local function SetMessage(msgtype)
-	args.msg = db[msgtype..(db.solo and "_self" or "")]
+	args.msg = db[msgtype..(db.solo and "_solo" or "")]
 	args.color = db["color"..msgtype]
 end
 
@@ -273,7 +272,8 @@ local function ReplaceArgs(args, isChat)
 		k = gsub(k, "(%p)", "%%%1")
 		msg = msg:gsub(k, s)
 	end
-	msg = msg:gsub("  ", " ") -- remove double whitespaces
+	msg = msg:gsub("  ", " ") -- remove double spaces
+	msg = msg:trim() -- remove leading whitespace
 	return msg
 end
 
@@ -302,33 +302,31 @@ end
 	--- CLEU ---
 	------------
 
+-- what do you mean, Single Entry, Single Exit? returns are the best thing ever :3
 function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
-	
 	local timestamp, subevent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, spellID, spellName, spellSchool, SuffixParam1, SuffixParam2, SuffixParam3 = ...
 	
-	local sourceType = tonumber(strsub(sourceGUID, 5, 5))
-	local destType = tonumber(strsub(destGUID, 5, 5))
-	local sourcePlayer = sourceType and (bit_band(sourceType, 0x7) == 0)
-	local destPlayer = destType and (bit_band(destType, 0x7) == 0)
+	-- when the unit doesnt exist, guid is an empty string and name is nil
+	if #sourceGUID == 0 then return end
 	
+	local sourcePlayer = (bit_band(strsub(sourceGUID, 5, 5), 0x7) == 0)
 	if not sourcePlayer then return end -- only show jukes/interrupts done by players
-	if db.solo and sourceGUID ~= S.player.guid then return end -- only show stuff done by yourself
 	
-	wipe(args)
+	if db.solo and sourceGUID ~= S.player.guid then return end -- if solo mode, only show stuff done by yourself
+	
+	wipe(args) -- reset args
 	
 	if subevent == "SPELL_CAST_SUCCESS" then
 		if S.InterruptID[spellID] and db.togglejuke then
 			guids[sourceGUID] = true -- casted interrupt
-			-- trying to save a vararg; am I doing this right? :x
-			local varg, n = {...}, select("#", ...)
-			varg[2] = "SPELL_INTERRUPT_WASTED"
-			S.Timer(function()
-				if guids[sourceGUID] then -- wasted interrupt
-					-- need to fire another event since we are now delayed
-					self:COMBAT_LOG_EVENT_UNFILTERED(event, unpack(varg, 1, n))
+			S.Timer:New(function()
+				if guids[sourceGUID] then -- interrupt was wasted in the meantime
+					-- need to re-fire CLEU. just calling SetMessage here wont achieve anything
+					self:COMBAT_LOG_EVENT_UNFILTERED(event, timestamp, "SPELL_INTERRUPT_WASTED", hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, spellID, spellName, spellSchool)
 				end
 				guids[sourceGUID] = false
 			end, .5) -- wait for SPELL_INTERRUPT delay/lag
+			return -- this could avoid duplicate messages since the args from the re-fired CLEU werent wiped
 		end
 	
 	elseif subevent == "SPELL_MISSED" then
@@ -371,6 +369,7 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 	end
 	
 	if destName then
+		local destPlayer = (bit_band(strsub(destGUID, 5, 5), 0x7) == 0)
 		local name = destPlayer and strmatch(destName, "([^%-]+)%-?.*") or destName
 		local fname = (destGUID == S.player.guid) and UNIT_YOU_DEST or name
 		local destIconLocal, destIconChat = UnitIcon(destRaidFlags, 2)
@@ -383,9 +382,9 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 	
 	args.spell, args.spellx = _GetSpellInfo(spellID, spellName, spellSchool)
 	
---------------
---- Output ---
---------------
+	--------------
+	--- Output ---
+	--------------
 	
 	ChatFrame1:AddMessage(ReplaceArgs(args), unpack(args.color))
 	

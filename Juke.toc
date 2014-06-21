@@ -1,5 +1,5 @@
 ## Interface: 50400
-## Version: 0.2
+## Version: 0.3
 ## Title: Juke
 ## Notes: Shows Jukes and Interrupts
 ## Author: Ketho @ EU-Boulderfist
