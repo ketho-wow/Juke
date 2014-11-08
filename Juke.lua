@@ -2,7 +2,7 @@
 --- Author: Ketho (EU-Boulderfist)		---
 --- License: Public Domain				---
 --- Created: 2014.06.17					---
---- Version: 0.3 [2014.06.22]			---
+--- Version: 0.5 [2014.11.08]			---
 -------------------------------------------
 --- Curse			http://www.curse.com/addons/wow/juke
 --- WoWInterface	http://www.wowinterface.com/downloads/info22890-Juke.html

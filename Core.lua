@@ -309,7 +309,7 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 	-- when the unit doesnt exist, guid is an empty string and name is nil
 	if #sourceGUID == 0 then return end
 	
-	local sourcePlayer = (bit_band(strsub(sourceGUID, 5, 5), 0x7) == 0)
+	local sourcePlayer = (strsplit("-", sourceGUID) == "Player")
 	if not sourcePlayer then return end -- only show jukes/interrupts done by players
 	
 	if db.solo and sourceGUID ~= S.player.guid then return end -- if solo mode, only show stuff done by yourself
@@ -369,7 +369,7 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 	end
 	
 	if destName then
-		local destPlayer = (bit_band(strsub(destGUID, 5, 5), 0x7) == 0)
+		local destPlayer = (strsplit("-", destGUID) == "Player")
 		local name = destPlayer and strmatch(destName, "([^%-]+)%-?.*") or destName
 		local fname = (destGUID == S.player.guid) and UNIT_YOU_DEST or name
 		local destIconLocal, destIconChat = UnitIcon(destRaidFlags, 2)
