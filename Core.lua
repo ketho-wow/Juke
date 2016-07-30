@@ -67,11 +67,6 @@ local options = {
 					type = "toggle", order = 1, descStyle = "",
 					name = function() return " |cff"..S.dec2hex(db.colorinterrupt)..INTERRUPT.."|r" end,
 				},
-				colorinterrupt = {
-					type = "color", order = 2, descStyle = "",
-					name = " ",
-					get = "GetColor", set = "SetColor",
-				},
 				interrupt = {
 					type = "input", order = 3, width = "full",
 					name = "",
@@ -81,11 +76,6 @@ local options = {
 					type = "toggle", order = 4, descStyle = "",
 					name = function() return " |cff"..S.dec2hex(db.colorjuke).."Juke|r" end,
 				},
-				colorjuke = {
-					type = "color", order = 5, descStyle = "",
-					name = " ",
-					get = "GetColor", set = "SetColor",
-				},
 				juke = {
 					type = "input", order = 6, width = "full",
 					name = "",
@@ -93,21 +83,13 @@ local options = {
 				},
 			},
 		},
-		reset = {
-			type = "execute", order = 3, descStyle = "",
-			name = RESET,
-			func = function()
-				JukeDB = CopyTable(defaults)
-				db = JukeDB
-			end,
-		},
 		chat = {
 			type = "select", order = 4, descStyle = "",
 			name = "   |cffFFFFFF"..CHAT.." "..CHANNEL.."|r",
 			values = {
 				"|cffFF0000<"..NONE..">|r",
 				"  "..CHAT_MSG_SAY,
-				"  |cffA8A8FF"..CHAT_MSG_PARTY.."|r / |cffFF7F00"..CHAT_MSG_RAID.."|r",
+				"  |cffA8A8FF"..GROUP.."|r",
 			},
 			set = function(i, v)
 				db.chat = v
@@ -123,17 +105,6 @@ end
 
 function Juke:SetValue(i, v)
 	db[i[#i]] = v
-end
-
-function Juke:GetColor(i)
-	return unpack(db[i[#i]])
-end
-
-function Juke:SetColor(i, r, g, b)
-	local c = db[i[#i]]
-	c[1] = r
-	c[2] = g
-	c[3] = b
 end
 
 function Juke:GetInput(i)
@@ -215,7 +186,7 @@ end})
 
 local function _GetSpellInfo(spellID, spellName, spellSchool)
 	-- fallback to default spell color for combined magic schools
-	local spellLinkLocal = format(" |cff%s"..TEXT_MODE_A_STRING_SPELL.."|r", S.SchoolColor[spellSchool] or "71D5FF", spellID, "", spellName)
+	local spellLinkLocal = format(" |cff%s"..TEXT_MODE_A_STRING_SPELL.."|r", S.SchoolColor[spellSchool] or "71D5FF", spellID, 0, "", spellName)
 	local spellIcon = format("|T%s:16:16:2:0%s|t", GetSpellIcon[spellID], crop)
 	return spellLinkLocal..spellIcon, _GetSpellLink[spellID]
 end
@@ -318,7 +289,7 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 	
 	if subevent == "SPELL_CAST_SUCCESS" then
 		if S.InterruptID[spellID] and db.togglejuke then
-			guids[sourceGUID] = true -- casted interrupt
+			guids[sourceGUID] = timestamp -- casted interrupt
 			S.Timer:New(function()
 				if guids[sourceGUID] then -- interrupt was wasted in the meantime
 					-- need to re-fire CLEU. just calling SetMessage here wont achieve anything
@@ -340,6 +311,11 @@ function Juke:COMBAT_LOG_EVENT_UNFILTERED(event, ...)
 		
 		if db.toggleinterrupt then
 			SetMessage("interrupt")
+			--[[ -- experimental, would have to track how long a spell was being cast before being interrrupted...
+			if guids[sourceGUID] and timestamp - guids[sourceGUID] < .2 then
+				print(format("[%s] could be using a kick bot (Δ = %.3f seconds)", sourceName, timestamp - guids[sourceGUID]))
+			end
+			]]
 		end
 		if S.InterruptID[spellID] then
 			guids[sourceGUID] = false -- succesful interrupt

@@ -1,17 +1,8 @@
--------------------------------------------
---- Author: Ketho (EU-Boulderfist)		---
---- License: Public Domain				---
---- Created: 2014.06.17					---
---- Version: 0.5 [2014.11.08]			---
--------------------------------------------
---- Curse			http://www.curse.com/addons/wow/juke
---- WoWInterface	http://www.wowinterface.com/downloads/info22890-Juke.html
+-- Author: Ketho (EU-Boulderfist)
+-- License: Public Domain
 
 local NAME, S = ...
 S.VERSION = GetAddOnMetadata(NAME, "Version")
-S.BUILD = "Release"
-
-local pairs = pairs
 
 	------------
 	--- Data ---
@@ -25,6 +16,7 @@ S.InterruptID = {
 	--[15487] = true, -- Priest: [Silence]
 	[47528] = true, -- Death Knight: [Mind Freeze]
 	--[47476] = true, -- Death Knight: [Strangulate]
+	[183752] = true, -- Demon Hunter: [Consume Magic]
 	[147362] = true, -- Hunter: [Counter Shot]
 	--[34490] = true, -- Hunter: [Silencing Shot]
 	[57994] = true, -- Shaman: [Wind Shear]

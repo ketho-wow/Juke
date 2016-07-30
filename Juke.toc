@@ -1,5 +1,5 @@
-## Interface: 60000
-## Version: 0.5
+## Interface: 70000
+## Version: 0.6
 ## Title: Juke
 ## Notes: Shows Jukes and Interrupts
 ## Author: Ketho @ EU-Boulderfist
